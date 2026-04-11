@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,9 +26,23 @@ export default function AdminLogin() {
     const { error } = await signIn(email, password);
     if (error) {
       toast.error("Invalid credentials");
-    } else {
-      toast.success("Welcome back!");
-      navigate("/admin");
+      setLoading(false);
+      return;
+    }
+    // Check admin role before redirecting
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: isAdmin } = await supabase.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin" as const,
+      });
+      if (isAdmin) {
+        toast.success("Welcome back!");
+        navigate("/admin");
+      } else {
+        toast.error("You do not have admin access");
+        await supabase.auth.signOut();
+      }
     }
     setLoading(false);
   };
