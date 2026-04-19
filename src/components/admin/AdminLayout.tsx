@@ -21,7 +21,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    await supabase.auth.signOut();
     localStorage.removeItem("demo_admin");
     navigate("/admin/login");
   };
