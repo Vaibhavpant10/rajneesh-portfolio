@@ -3,37 +3,57 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, LogIn, Eye, EyeOff } from "lucide-react";
+import { GraduationCap, LogIn, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-const DEMO_EMAIL = "admin@demo.com";
-const DEMO_PASSWORD = "admin123";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       toast.error("Please fill in all fields");
       return;
     }
-    if (email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD) {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error || !data.user) {
+        toast.error(error?.message || "Invalid credentials");
+        setLoading(false);
+        return;
+      }
+      const { data: isAdmin, error: roleError } = await supabase.rpc("has_role", {
+        _user_id: data.user.id,
+        _role: "admin",
+      });
+      if (roleError || !isAdmin) {
+        await supabase.auth.signOut();
+        toast.error("Access denied. Admin role required.");
+        setLoading(false);
+        return;
+      }
       localStorage.setItem("demo_admin", "true");
       toast.success("Welcome back!");
       navigate("/admin");
-    } else {
-      toast.error("Invalid credentials. Use admin@demo.com / admin123");
+    } catch (err) {
+      toast.error("Login failed. Please try again.");
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 30% 30%, hsl(221 83% 53% / 0.12) 0%, transparent 50%), radial-gradient(ellipse at 70% 70%, hsl(270 60% 55% / 0.1) 0%, transparent 50%)" }} />
-      
+
       <Card className="w-full max-w-md glass-card relative z-10">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-secondary to-accent flex items-center justify-center glow-primary">
@@ -43,7 +63,7 @@ export default function AdminLogin() {
             <span className="text-foreground">Admin </span>
             <span className="text-accent text-glow">Login</span>
           </CardTitle>
-          <p className="text-muted-foreground text-sm">Demo: admin@demo.com / admin123</p>
+          <p className="text-muted-foreground text-sm">Sign in with your admin account</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -51,10 +71,11 @@ export default function AdminLogin() {
               <label className="text-sm font-medium text-foreground">Email</label>
               <Input
                 type="email"
-                placeholder="admin@demo.com"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-muted/30 border-border/50 focus:border-accent"
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -66,15 +87,16 @@ export default function AdminLogin() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-muted/30 border-border/50 focus:border-accent pr-10"
+                  disabled={loading}
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
-            <Button type="submit" className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 glow-primary">
-              <LogIn size={16} />
-              Sign In
+            <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 glow-primary">
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
         </CardContent>
