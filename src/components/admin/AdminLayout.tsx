@@ -1,6 +1,5 @@
 import { ReactNode, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   GraduationCap, LayoutDashboard, User, BookOpen, Award,
@@ -19,12 +18,11 @@ const sidebarItems = [
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleSignOut = async () => {
-    await signOut();
+  const handleSignOut = () => {
+    localStorage.removeItem("demo_admin");
     navigate("/admin/login");
   };
 
@@ -88,7 +86,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <Menu size={20} />
           </button>
           <div className="flex-1" />
-          <span className="text-sm text-muted-foreground">{user?.email}</span>
+          <span className="text-sm text-muted-foreground">admin@demo.com</span>
         </header>
         <main className="flex-1 p-4 sm:p-6 overflow-auto">
           {children}
