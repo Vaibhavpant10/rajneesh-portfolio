@@ -14,38 +14,54 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const withTimeout = async <T,>(p: PromiseLike<T>, ms = 15000): Promise<T> => {
+    let timer: any;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Request timed out. Please check your connection and try again.")), ms);
+    });
+    try {
+      return (await Promise.race([Promise.resolve(p), timeout])) as T;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!email.trim() || !password.trim()) {
       toast.error("Please fill in all fields");
       return;
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (error || !data.user) {
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email: email.trim(), password })
+      );
+      if (error || !data?.user) {
+        // Ensure no stale session lingers on failure
+        await supabase.auth.signOut().catch(() => {});
+        localStorage.removeItem("demo_admin");
         toast.error(error?.message || "Invalid credentials");
-        setLoading(false);
         return;
       }
-      const { data: isAdmin, error: roleError } = await supabase.rpc("has_role", {
-        _user_id: data.user.id,
-        _role: "admin",
-      });
+      const { data: isAdmin, error: roleError } = await withTimeout(
+        supabase.rpc("has_role", { _user_id: data.user.id, _role: "admin" })
+      );
       if (roleError || !isAdmin) {
-        await supabase.auth.signOut();
-        toast.error("Access denied. Admin role required.");
-        setLoading(false);
+        await supabase.auth.signOut().catch(() => {});
+        localStorage.removeItem("demo_admin");
+        toast.error(roleError?.message || "Access denied. Admin role required.");
         return;
       }
       localStorage.setItem("demo_admin", "true");
       toast.success("Welcome back!");
-      navigate("/admin");
-    } catch (err) {
-      toast.error("Login failed. Please try again.");
+      navigate("/admin", { replace: true });
+    } catch (err: any) {
+      await supabase.auth.signOut().catch(() => {});
+      localStorage.removeItem("demo_admin");
+      toast.error(err?.message || "Login failed. Please try again.");
+    } finally {
       setLoading(false);
     }
   };

@@ -19,13 +19,20 @@ export default function ContactEditor() {
   }, []);
 
   const handleSave = async () => {
+    if (saving || !data.id) return;
     setSaving(true);
-    const { error } = await supabase.from("contact_info").update({
-      email: data.email || null, phone: data.phone || null,
-      linkedin: data.linkedin || null, github: data.github || null, twitter: data.twitter || null,
-    }).eq("id", data.id);
-    if (error) toast.error("Failed to save"); else toast.success("Contact info updated!");
-    setSaving(false);
+    try {
+      const { error } = await supabase.from("contact_info").update({
+        email: data.email || null, phone: data.phone || null,
+        linkedin: data.linkedin || null, github: data.github || null, twitter: data.twitter || null,
+      }).eq("id", data.id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Contact info updated!");
+    } catch (err: any) {
+      toast.error(err?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div>;

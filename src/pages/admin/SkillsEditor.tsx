@@ -19,24 +19,46 @@ export default function SkillsEditor() {
   const [saving, setSaving] = useState(false);
 
   const fetchSkills = async () => {
-    const { data } = await supabase.from("skills").select("*").order("category").order("sort_order");
-    if (data) setSkills(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from("skills").select("*").order("category").order("sort_order");
+      if (error) { toast.error(error.message); return; }
+      setSkills(data ?? []);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to load skills");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchSkills(); }, []);
 
   const handleAdd = async () => {
+    if (saving) return;
     if (!name.trim()) { toast.error("Name is required"); return; }
     setSaving(true);
-    const { error } = await supabase.from("skills").insert({ name, category, sort_order: skills.filter(s => s.category === category).length });
-    if (error) toast.error("Failed to add"); else { toast.success("Skill added!"); setDialogOpen(false); setName(""); fetchSkills(); }
-    setSaving(false);
+    try {
+      const { error } = await supabase.from("skills").insert({ name: name.trim(), category, sort_order: skills.filter(s => s.category === category).length });
+      if (error) { toast.error(error.message); return; }
+      toast.success("Skill added!");
+      setDialogOpen(false);
+      setName("");
+      await fetchSkills();
+    } catch (err: any) {
+      toast.error(err?.message || "Add failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("skills").delete().eq("id", id);
-    if (error) toast.error("Failed to delete"); else { toast.success("Deleted!"); fetchSkills(); }
+    try {
+      const { error } = await supabase.from("skills").delete().eq("id", id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Deleted!");
+      setSkills((prev) => prev.filter((s) => s.id !== id));
+    } catch (err: any) {
+      toast.error(err?.message || "Delete failed");
+    }
   };
 
   const teaching = skills.filter(s => s.category === "teaching");
