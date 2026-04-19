@@ -20,15 +20,21 @@ export default function HeroEditor() {
   }, []);
 
   const handleSave = async () => {
+    if (saving || !data.id) return;
     setSaving(true);
-    const { error } = await supabase.from("hero_content").update({
-      name: data.name, tagline: data.tagline, intro: data.intro,
-      button1_text: data.button1_text, button2_text: data.button2_text,
-      image_url: data.image_url || null,
-    }).eq("id", data.id);
-    if (error) toast.error("Failed to save");
-    else toast.success("Hero section updated!");
-    setSaving(false);
+    try {
+      const { error } = await supabase.from("hero_content").update({
+        name: data.name, tagline: data.tagline, intro: data.intro,
+        button1_text: data.button1_text, button2_text: data.button2_text,
+        image_url: data.image_url || null,
+      }).eq("id", data.id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Hero section updated!");
+    } catch (err: any) {
+      toast.error(err?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div>;

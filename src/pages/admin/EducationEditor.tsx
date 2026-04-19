@@ -19,35 +19,62 @@ export default function EducationEditor() {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
 
-  const fetch = async () => {
-    const { data } = await supabase.from("education_entries").select("*").order("sort_order");
-    if (data) setEntries(data);
-    setLoading(false);
+  const loadEntries = async () => {
+    try {
+      const { data, error } = await supabase.from("education_entries").select("*").order("sort_order");
+      if (error) { toast.error(error.message); return; }
+      setEntries(data ?? []);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to load entries");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { loadEntries(); }, []);
 
   const openNew = () => { setEditing(null); setForm(empty); setDialogOpen(true); };
   const openEdit = (e: Entry) => { setEditing(e); setForm({ degree: e.degree, institution: e.institution, location: e.location ?? "", start_year: e.start_year ?? "", end_year: e.end_year ?? "", description: e.description ?? "", sort_order: e.sort_order }); setDialogOpen(true); };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.degree.trim() || !form.institution.trim()) { toast.error("Degree and institution are required"); return; }
     setSaving(true);
-    if (editing) {
-      const { error } = await supabase.from("education_entries").update(form).eq("id", editing.id);
-      if (error) toast.error("Failed to update"); else toast.success("Updated!");
-    } else {
-      const { error } = await supabase.from("education_entries").insert(form);
-      if (error) toast.error("Failed to add"); else toast.success("Added!");
+    try {
+      const payload = {
+        ...form,
+        location: form.location || null,
+        start_year: form.start_year || null,
+        end_year: form.end_year || null,
+        description: form.description || null,
+      };
+      if (editing) {
+        const { error } = await supabase.from("education_entries").update(payload).eq("id", editing.id);
+        if (error) { toast.error(error.message); return; }
+        toast.success("Updated!");
+      } else {
+        const { error } = await supabase.from("education_entries").insert(payload);
+        if (error) { toast.error(error.message); return; }
+        toast.success("Added!");
+      }
+      setDialogOpen(false);
+      await loadEntries();
+    } catch (err: any) {
+      toast.error(err?.message || "Save failed");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setDialogOpen(false);
-    fetch();
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("education_entries").delete().eq("id", id);
-    if (error) toast.error("Failed to delete"); else { toast.success("Deleted!"); fetch(); }
+    try {
+      const { error } = await supabase.from("education_entries").delete().eq("id", id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Deleted!");
+      setEntries((prev) => prev.filter((x) => x.id !== id));
+    } catch (err: any) {
+      toast.error(err?.message || "Delete failed");
+    }
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div>;

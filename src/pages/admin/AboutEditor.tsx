@@ -20,11 +20,17 @@ export default function AboutEditor() {
   }, []);
 
   const handleSave = async () => {
+    if (saving || !id) return;
     setSaving(true);
-    const { error } = await supabase.from("about_content").update({ description }).eq("id", id);
-    if (error) toast.error("Failed to save");
-    else toast.success("About section updated!");
-    setSaving(false);
+    try {
+      const { error } = await supabase.from("about_content").update({ description }).eq("id", id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("About section updated!");
+    } catch (err: any) {
+      toast.error(err?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div>;
