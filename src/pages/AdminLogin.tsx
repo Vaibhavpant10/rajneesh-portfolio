@@ -1,50 +1,33 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, LogIn, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
+const DEMO_EMAIL = "admin@demo.com";
+const DEMO_PASSWORD = "admin123";
+
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       toast.error("Please fill in all fields");
       return;
     }
-    setLoading(true);
-    const { error } = await signIn(email, password);
-    if (error) {
-      toast.error("Invalid credentials");
-      setLoading(false);
-      return;
+    if (email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD) {
+      localStorage.setItem("demo_admin", "true");
+      toast.success("Welcome back!");
+      navigate("/admin");
+    } else {
+      toast.error("Invalid credentials. Use admin@demo.com / admin123");
     }
-    // Check admin role before redirecting
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: isAdmin } = await supabase.rpc("has_role", {
-        _user_id: user.id,
-        _role: "admin" as const,
-      });
-      if (isAdmin) {
-        toast.success("Welcome back!");
-        navigate("/admin");
-      } else {
-        toast.error("You do not have admin access");
-        await supabase.auth.signOut();
-      }
-    }
-    setLoading(false);
   };
 
   return (
@@ -60,7 +43,7 @@ export default function AdminLogin() {
             <span className="text-foreground">Admin </span>
             <span className="text-accent text-glow">Login</span>
           </CardTitle>
-          <p className="text-muted-foreground text-sm">Sign in to manage your portfolio</p>
+          <p className="text-muted-foreground text-sm">Demo: admin@demo.com / admin123</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -68,7 +51,7 @@ export default function AdminLogin() {
               <label className="text-sm font-medium text-foreground">Email</label>
               <Input
                 type="email"
-                placeholder="admin@example.com"
+                placeholder="admin@demo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-muted/30 border-border/50 focus:border-accent"
@@ -89,9 +72,9 @@ export default function AdminLogin() {
                 </button>
               </div>
             </div>
-            <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 glow-primary">
+            <Button type="submit" className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 glow-primary">
               <LogIn size={16} />
-              {loading ? "Signing in..." : "Sign In"}
+              Sign In
             </Button>
           </form>
         </CardContent>
