@@ -14,11 +14,17 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const withTimeout = <T,>(p: Promise<T>, ms = 15000): Promise<T> =>
-    Promise.race([
-      p,
-      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("Request timed out. Please check your connection and try again.")), ms)),
-    ]);
+  const withTimeout = async <T,>(p: PromiseLike<T>, ms = 15000): Promise<T> => {
+    let timer: any;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Request timed out. Please check your connection and try again.")), ms);
+    });
+    try {
+      return (await Promise.race([Promise.resolve(p), timeout])) as T;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
