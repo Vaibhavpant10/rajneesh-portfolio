@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
+import { withTimeout } from "@/lib/request";
 
 export default function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<"loading" | "ok" | "deny">("loading");
@@ -10,21 +11,8 @@ export default function AdminProtectedRoute({ children }: { children: React.Reac
   useEffect(() => {
     let active = true;
 
-    const withTimeout = async <T,>(promise: PromiseLike<T>, ms = 10000): Promise<T> => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Authentication timed out.")), ms);
-      });
-
-      try {
-        return (await Promise.race([Promise.resolve(promise), timeout])) as T;
-      } finally {
-        if (timer) clearTimeout(timer);
-      }
-    };
-
     const resetInvalidSession = async () => {
-      await withTimeout(supabase.auth.signOut(), 5000).catch(() => {});
+      await withTimeout(supabase.auth.signOut(), { ms: 5000, message: "Authentication reset timed out." }).catch(() => {});
     };
 
     const setSafeStatus = (next: "loading" | "ok" | "deny") => {
@@ -35,7 +23,7 @@ export default function AdminProtectedRoute({ children }: { children: React.Reac
       setSafeStatus("loading");
 
       try {
-        const session = nextSession ?? (await withTimeout(supabase.auth.getSession())).data.session;
+        const session = nextSession ?? (await withTimeout(supabase.auth.getSession(), { ms: 10000, message: "Authentication timed out." })).data.session;
 
         if (!session?.user || !session.access_token) {
           await resetInvalidSession();
@@ -47,7 +35,8 @@ export default function AdminProtectedRoute({ children }: { children: React.Reac
           supabase.rpc("has_role", {
             _user_id: session.user.id,
             _role: "admin",
-          })
+          }),
+          { ms: 10000, message: "Admin verification timed out." }
         );
 
         if (error || !isAdmin) {
@@ -65,7 +54,9 @@ export default function AdminProtectedRoute({ children }: { children: React.Reac
 
     void check();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      void check(session);
+      queueMicrotask(() => {
+        void check(session);
+      });
     });
 
     return () => {
