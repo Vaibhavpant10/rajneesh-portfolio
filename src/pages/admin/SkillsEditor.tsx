@@ -92,13 +92,13 @@ export default function SkillsEditor() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        {[{ title: "Teaching Skills", items: teaching, color: "primary" }, { title: "Technical Skills", items: technical, color: "secondary" }].map(({ title, items, color }) => (
+        {[{ title: "Teaching Skills", items: teaching, tone: "primary" }, { title: "Technical Skills", items: technical, tone: "secondary" }].map(({ title, items, tone }) => (
           <Card key={title} className="glass-card">
             <CardHeader><CardTitle className="text-lg">{title}</CardTitle></CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {items.map((s) => (
-                  <span key={s.id} className={category === "technical" ? "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary text-sm border border-secondary/20" : "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm border border-primary/20"}>
+                  <span key={s.id} className={tone === "secondary" ? "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary text-sm border border-secondary/20" : "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm border border-primary/20"}>
                     {s.name}
                     <button onClick={() => handleDelete(s.id)} className="hover:text-destructive transition-colors"><Trash2 size={12} /></button>
                   </span>
