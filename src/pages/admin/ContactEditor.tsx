@@ -5,31 +5,53 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Loader2, Mail, Phone, Linkedin, Github, Twitter } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage, withTimeout } from "@/lib/request";
 
 export default function ContactEditor() {
   const [data, setData] = useState({ id: "", email: "", phone: "", linkedin: "", github: "", twitter: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    supabase.from("contact_info").select("*").limit(1).single().then(({ data: d }) => {
-      if (d) setData({ id: d.id, email: d.email ?? "", phone: d.phone ?? "", linkedin: d.linkedin ?? "", github: d.github ?? "", twitter: d.twitter ?? "" });
+  const loadContact = async () => {
+    setLoading(true);
+    try {
+      const { data: record, error } = await withTimeout(
+        supabase.from("contact_info").select("*").limit(1).maybeSingle(),
+        { ms: 10000, message: "Loading contact info timed out." },
+      );
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      if (record) {
+        setData({ id: record.id, email: record.email ?? "", phone: record.phone ?? "", linkedin: record.linkedin ?? "", github: record.github ?? "", twitter: record.twitter ?? "" });
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to load contact info"));
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    void loadContact();
   }, []);
 
   const handleSave = async () => {
     if (saving || !data.id) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("contact_info").update({
+      const { error } = await withTimeout(supabase.from("contact_info").update({
         email: data.email || null, phone: data.phone || null,
         linkedin: data.linkedin || null, github: data.github || null, twitter: data.twitter || null,
-      }).eq("id", data.id);
+      }).eq("id", data.id), { ms: 15000, message: "Saving contact info timed out." });
       if (error) { toast.error(error.message); return; }
       toast.success("Contact info updated!");
-    } catch (err: any) {
-      toast.error(err?.message || "Save failed");
+      await loadContact();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Save failed"));
     } finally {
       setSaving(false);
     }

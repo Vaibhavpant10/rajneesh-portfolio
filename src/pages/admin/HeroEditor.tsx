@@ -6,32 +6,54 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage, withTimeout } from "@/lib/request";
 
 export default function HeroEditor() {
   const [data, setData] = useState({ id: "", name: "", tagline: "", intro: "", button1_text: "", button2_text: "", image_url: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    supabase.from("hero_content").select("*").limit(1).single().then(({ data: d }) => {
-      if (d) setData({ id: d.id, name: d.name, tagline: d.tagline, intro: d.intro, button1_text: d.button1_text, button2_text: d.button2_text, image_url: d.image_url ?? "" });
+  const loadHero = async () => {
+    setLoading(true);
+    try {
+      const { data: record, error } = await withTimeout(
+        supabase.from("hero_content").select("*").limit(1).maybeSingle(),
+        { ms: 10000, message: "Loading hero content timed out." },
+      );
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      if (record) {
+        setData({ id: record.id, name: record.name, tagline: record.tagline, intro: record.intro, button1_text: record.button1_text, button2_text: record.button2_text, image_url: record.image_url ?? "" });
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to load hero content"));
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    void loadHero();
   }, []);
 
   const handleSave = async () => {
     if (saving || !data.id) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("hero_content").update({
+      const { error } = await withTimeout(supabase.from("hero_content").update({
         name: data.name, tagline: data.tagline, intro: data.intro,
         button1_text: data.button1_text, button2_text: data.button2_text,
         image_url: data.image_url || null,
-      }).eq("id", data.id);
+      }).eq("id", data.id), { ms: 15000, message: "Saving hero content timed out." });
       if (error) { toast.error(error.message); return; }
       toast.success("Hero section updated!");
-    } catch (err: any) {
-      toast.error(err?.message || "Save failed");
+      await loadHero();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Save failed"));
     } finally {
       setSaving(false);
     }
