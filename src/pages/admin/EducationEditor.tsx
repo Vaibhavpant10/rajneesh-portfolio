@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage, withTimeout } from "@/lib/request";
 
 type Entry = { id: string; degree: string; institution: string; location: string | null; start_year: string | null; end_year: string | null; description: string | null; sort_order: number };
 const empty: Omit<Entry, "id"> = { degree: "", institution: "", location: "", start_year: "", end_year: "", description: "", sort_order: 0 };
@@ -20,12 +21,16 @@ export default function EducationEditor() {
   const [saving, setSaving] = useState(false);
 
   const loadEntries = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase.from("education_entries").select("*").order("sort_order");
+      const { data, error } = await withTimeout(
+        supabase.from("education_entries").select("*").order("sort_order"),
+        { ms: 10000, message: "Loading education entries timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       setEntries(data ?? []);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to load entries");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to load entries"));
     } finally {
       setLoading(false);
     }
@@ -49,18 +54,26 @@ export default function EducationEditor() {
         description: form.description || null,
       };
       if (editing) {
-        const { error } = await supabase.from("education_entries").update(payload).eq("id", editing.id);
+        const { error } = await withTimeout(
+          supabase.from("education_entries").update(payload).eq("id", editing.id),
+          { ms: 15000, message: "Updating education entry timed out." },
+        );
         if (error) { toast.error(error.message); return; }
         toast.success("Updated!");
       } else {
-        const { error } = await supabase.from("education_entries").insert(payload);
+        const { error } = await withTimeout(
+          supabase.from("education_entries").insert(payload),
+          { ms: 15000, message: "Adding education entry timed out." },
+        );
         if (error) { toast.error(error.message); return; }
         toast.success("Added!");
       }
       setDialogOpen(false);
+      setEditing(null);
+      setForm(empty);
       await loadEntries();
-    } catch (err: any) {
-      toast.error(err?.message || "Save failed");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -68,12 +81,16 @@ export default function EducationEditor() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from("education_entries").delete().eq("id", id);
+      const { error } = await withTimeout(
+        supabase.from("education_entries").delete().eq("id", id),
+        { ms: 15000, message: "Deleting education entry timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       toast.success("Deleted!");
       setEntries((prev) => prev.filter((x) => x.id !== id));
-    } catch (err: any) {
-      toast.error(err?.message || "Delete failed");
+      await loadEntries();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Delete failed"));
     }
   };
 

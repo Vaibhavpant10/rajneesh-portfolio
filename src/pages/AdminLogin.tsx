@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, LogIn, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getErrorMessage, withTimeout } from "@/lib/request";
 
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
@@ -14,20 +15,8 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const withTimeout = async <T,>(p: PromiseLike<T>, ms = 15000): Promise<T> => {
-    let timer: any;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Request timed out. Please check your connection and try again.")), ms);
-    });
-    try {
-      return (await Promise.race([Promise.resolve(p), timeout])) as T;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
   const resetAuthState = async () => {
-    await withTimeout(supabase.auth.signOut(), 5000).catch(() => {});
+    await withTimeout(supabase.auth.signOut(), { ms: 5000, message: "Could not reset auth state." }).catch(() => {});
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,7 +31,8 @@ export default function AdminLogin() {
       await resetAuthState();
 
       const { data, error } = await withTimeout(
-        supabase.auth.signInWithPassword({ email: email.trim(), password })
+        supabase.auth.signInWithPassword({ email: email.trim(), password }),
+        { ms: 15000, message: "Login timed out. Please check your connection and try again." }
       );
       if (error || !data?.user || !data.session?.access_token) {
         await resetAuthState();
@@ -51,7 +41,8 @@ export default function AdminLogin() {
       }
 
       const { data: isAdmin, error: roleError } = await withTimeout(
-        supabase.rpc("has_role", { _user_id: data.user.id, _role: "admin" })
+        supabase.rpc("has_role", { _user_id: data.user.id, _role: "admin" }),
+        { ms: 10000, message: "Admin verification timed out. Please try again." }
       );
       if (roleError || !isAdmin) {
         await resetAuthState();
@@ -61,9 +52,9 @@ export default function AdminLogin() {
 
       toast.success("Welcome back!");
       navigate("/admin", { replace: true });
-    } catch (err: any) {
+    } catch (err) {
       await resetAuthState();
-      toast.error(err?.message || "Login failed. Please try again.");
+      toast.error(getErrorMessage(err, "Login failed. Please try again."));
     } finally {
       setLoading(false);
     }

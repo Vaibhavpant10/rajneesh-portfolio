@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage, withTimeout } from "@/lib/request";
 
 type Project = { id: string; title: string; organization: string | null; date_range: string | null; description: string | null; image_url: string | null; link: string | null; sort_order: number };
 const empty = { title: "", organization: "", date_range: "", description: "", image_url: "", link: "", sort_order: 0 };
@@ -20,12 +21,16 @@ export default function ProjectsEditor() {
   const [saving, setSaving] = useState(false);
 
   const fetchProjects = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase.from("projects").select("*").order("sort_order");
+      const { data, error } = await withTimeout(
+        supabase.from("projects").select("*").order("sort_order"),
+        { ms: 10000, message: "Loading projects timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       setProjects(data ?? []);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to load projects");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to load projects"));
     } finally {
       setLoading(false);
     }
@@ -47,18 +52,26 @@ export default function ProjectsEditor() {
     try {
       const payload = { ...form, organization: form.organization || null, date_range: form.date_range || null, description: form.description || null, image_url: form.image_url || null, link: form.link || null };
       if (editing) {
-        const { error } = await supabase.from("projects").update(payload).eq("id", editing.id);
+        const { error } = await withTimeout(
+          supabase.from("projects").update(payload).eq("id", editing.id),
+          { ms: 15000, message: "Updating project timed out." },
+        );
         if (error) { toast.error(error.message); return; }
         toast.success("Updated!");
       } else {
-        const { error } = await supabase.from("projects").insert(payload);
+        const { error } = await withTimeout(
+          supabase.from("projects").insert(payload),
+          { ms: 15000, message: "Adding project timed out." },
+        );
         if (error) { toast.error(error.message); return; }
         toast.success("Added!");
       }
       setDialogOpen(false);
+      setEditing(null);
+      setForm(empty);
       await fetchProjects();
-    } catch (err: any) {
-      toast.error(err?.message || "Save failed");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -66,12 +79,16 @@ export default function ProjectsEditor() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from("projects").delete().eq("id", id);
+      const { error } = await withTimeout(
+        supabase.from("projects").delete().eq("id", id),
+        { ms: 15000, message: "Deleting project timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       toast.success("Deleted!");
       setProjects((prev) => prev.filter((x) => x.id !== id));
-    } catch (err: any) {
-      toast.error(err?.message || "Delete failed");
+      await fetchProjects();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Delete failed"));
     }
   };
 

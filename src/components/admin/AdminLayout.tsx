@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import {
   GraduationCap, LayoutDashboard, User, BookOpen, Award,
   FolderOpen, Mail, LogOut, Menu, X, ChevronRight, Home
@@ -20,12 +21,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { session, signOut } = useAuth();
 
   const handleSignOut = async () => {
-    const { supabase } = await import("@/integrations/supabase/client");
-    await supabase.auth.signOut();
-    localStorage.removeItem("demo_admin");
-    navigate("/admin/login");
+    await signOut();
+    navigate("/admin/login", { replace: true });
   };
 
   return (
@@ -88,7 +88,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <Menu size={20} />
           </button>
           <div className="flex-1" />
-          <span className="text-sm text-muted-foreground">admin@demo.com</span>
+          <span className="text-sm text-muted-foreground">{session?.user.email ?? "admin"}</span>
         </header>
         <main className="flex-1 p-4 sm:p-6 overflow-auto">
           {children}

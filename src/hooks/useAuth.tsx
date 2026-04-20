@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { withTimeout } from "@/lib/request";
 
 interface AuthContextType {
   user: User | null;
@@ -20,46 +21,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const checkAdmin = async (userId: string) => {
-    const { data } = await supabase.rpc("has_role", {
-      _user_id: userId,
-      _role: "admin",
-    });
-    setIsAdmin(!!data);
+    try {
+      const { data, error } = await withTimeout(
+        supabase.rpc("has_role", {
+          _user_id: userId,
+          _role: "admin",
+        }),
+        { ms: 10000, message: "Admin verification timed out." },
+      );
+
+      if (error) {
+        setIsAdmin(false);
+        return false;
+      }
+
+      const nextIsAdmin = !!data;
+      setIsAdmin(nextIsAdmin);
+      return nextIsAdmin;
+    } catch {
+      setIsAdmin(false);
+      return false;
+    }
   };
 
   useEffect(() => {
+    let active = true;
+
+    const applySession = async (nextSession: Session | null) => {
+      if (!active) return;
+
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+
+      if (nextSession?.user) {
+        void checkAdmin(nextSession.user.id);
+      } else {
+        setIsAdmin(false);
+      }
+
+      if (active) setLoading(false);
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await checkAdmin(session.user.id);
-        } else {
-          setIsAdmin(false);
-        }
-        setLoading(false);
+      (_event, nextSession) => {
+        void applySession(nextSession);
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await checkAdmin(session.user.id);
-      }
-      setLoading(false);
-    });
+    void withTimeout(supabase.auth.getSession(), {
+      ms: 10000,
+      message: "Session restore timed out.",
+    })
+      .then(({ data: { session: restoredSession } }) => applySession(restoredSession))
+      .catch(() => {
+        if (!active) return;
+        setSession(null);
+        setUser(null);
+        setIsAdmin(false);
+        setLoading(false);
+      });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }), {
+      ms: 15000,
+      message: "Login timed out. Please try again.",
+    });
     return { error: error as Error | null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await withTimeout(supabase.auth.signOut(), { ms: 5000, message: "Logout timed out." }).catch(() => {});
+    setSession(null);
+    setUser(null);
     setIsAdmin(false);
   };
 

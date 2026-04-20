@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage, withTimeout } from "@/lib/request";
 
 export default function AboutEditor() {
   const [id, setId] = useState("");
@@ -12,22 +13,47 @@ export default function AboutEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    supabase.from("about_content").select("*").limit(1).single().then(({ data }) => {
-      if (data) { setId(data.id); setDescription(data.description); }
+  const loadAbout = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from("about_content").select("*").limit(1).maybeSingle(),
+        { ms: 10000, message: "Loading about content timed out." },
+      );
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      if (data) {
+        setId(data.id);
+        setDescription(data.description);
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to load about content"));
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    void loadAbout();
   }, []);
 
   const handleSave = async () => {
     if (saving || !id) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("about_content").update({ description }).eq("id", id);
+      const { error } = await withTimeout(
+        supabase.from("about_content").update({ description }).eq("id", id),
+        { ms: 15000, message: "Saving about content timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       toast.success("About section updated!");
-    } catch (err: any) {
-      toast.error(err?.message || "Save failed");
+      await loadAbout();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Save failed"));
     } finally {
       setSaving(false);
     }
