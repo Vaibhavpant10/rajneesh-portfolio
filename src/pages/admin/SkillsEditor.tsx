@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Trash2, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage, withTimeout } from "@/lib/request";
 
 type Skill = { id: string; name: string; category: string; sort_order: number };
 
@@ -19,12 +20,16 @@ export default function SkillsEditor() {
   const [saving, setSaving] = useState(false);
 
   const fetchSkills = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase.from("skills").select("*").order("category").order("sort_order");
+      const { data, error } = await withTimeout(
+        supabase.from("skills").select("*").order("category").order("sort_order"),
+        { ms: 10000, message: "Loading skills timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       setSkills(data ?? []);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to load skills");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to load skills"));
     } finally {
       setLoading(false);
     }
@@ -37,14 +42,18 @@ export default function SkillsEditor() {
     if (!name.trim()) { toast.error("Name is required"); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.from("skills").insert({ name: name.trim(), category, sort_order: skills.filter(s => s.category === category).length });
+      const { error } = await withTimeout(
+        supabase.from("skills").insert({ name: name.trim(), category, sort_order: skills.filter(s => s.category === category).length }),
+        { ms: 15000, message: "Adding skill timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       toast.success("Skill added!");
       setDialogOpen(false);
       setName("");
+      setCategory("teaching");
       await fetchSkills();
-    } catch (err: any) {
-      toast.error(err?.message || "Add failed");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Add failed"));
     } finally {
       setSaving(false);
     }
@@ -52,12 +61,16 @@ export default function SkillsEditor() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from("skills").delete().eq("id", id);
+      const { error } = await withTimeout(
+        supabase.from("skills").delete().eq("id", id),
+        { ms: 15000, message: "Deleting skill timed out." },
+      );
       if (error) { toast.error(error.message); return; }
       toast.success("Deleted!");
       setSkills((prev) => prev.filter((s) => s.id !== id));
-    } catch (err: any) {
-      toast.error(err?.message || "Delete failed");
+      await fetchSkills();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Delete failed"));
     }
   };
 
@@ -85,7 +98,7 @@ export default function SkillsEditor() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {items.map((s) => (
-                  <span key={s.id} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-${color}/10 text-${color} text-sm border border-${color}/20`}>
+                  <span key={s.id} className={category === "technical" ? "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary text-sm border border-secondary/20" : "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm border border-primary/20"}>
                     {s.name}
                     <button onClick={() => handleDelete(s.id)} className="hover:text-destructive transition-colors"><Trash2 size={12} /></button>
                   </span>
