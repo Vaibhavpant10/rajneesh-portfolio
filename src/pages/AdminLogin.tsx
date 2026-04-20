@@ -26,6 +26,10 @@ export default function AdminLogin() {
     }
   };
 
+  const resetAuthState = async () => {
+    await withTimeout(supabase.auth.signOut(), 5000).catch(() => {});
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -35,31 +39,30 @@ export default function AdminLogin() {
     }
     setLoading(true);
     try {
+      await resetAuthState();
+
       const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({ email: email.trim(), password })
       );
-      if (error || !data?.user) {
-        // Ensure no stale session lingers on failure
-        await supabase.auth.signOut().catch(() => {});
-        localStorage.removeItem("demo_admin");
+      if (error || !data?.user || !data.session?.access_token) {
+        await resetAuthState();
         toast.error(error?.message || "Invalid credentials");
         return;
       }
+
       const { data: isAdmin, error: roleError } = await withTimeout(
         supabase.rpc("has_role", { _user_id: data.user.id, _role: "admin" })
       );
       if (roleError || !isAdmin) {
-        await supabase.auth.signOut().catch(() => {});
-        localStorage.removeItem("demo_admin");
+        await resetAuthState();
         toast.error(roleError?.message || "Access denied. Admin role required.");
         return;
       }
-      localStorage.setItem("demo_admin", "true");
+
       toast.success("Welcome back!");
       navigate("/admin", { replace: true });
     } catch (err: any) {
-      await supabase.auth.signOut().catch(() => {});
-      localStorage.removeItem("demo_admin");
+      await resetAuthState();
       toast.error(err?.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
